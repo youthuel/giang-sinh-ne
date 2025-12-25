@@ -505,7 +505,7 @@
             });
             
             let longPressTimer;
-            el.addEventListener('touchstart', () => { longPressTimer = setTimeout(() => { if(isGalleryMode) triggerFireworkMode(); }, 1500); });
+            el.addEventListener('touchstart', () => { longPressTimer = setTimeout(() => { if(isGalleryMode) triggerFireworkMode(); }, 5000); });
             el.addEventListener('touchend', () => clearTimeout(longPressTimer));
         }
 
