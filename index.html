@@ -405,27 +405,34 @@
         }
 
         function initTouchControls() {
-        const el = document.getElementById('canvas-container');
+            const el = document.getElementById('canvas-container');
+            let lastTapTime = 0; // Biến lưu thời gian chạm lần trước
 
-            // 1. LOGIC LĂN CHUỘT (PC)
+            // --- 1. XỬ LÝ LĂN CHUỘT (ZOOM PC) ---
             el.addEventListener('wheel', (e) => {
                 if(isFireworkMode) return;
                 e.preventDefault();
-                // e.deltaY > 0 là lăn xuống (Zoom out), < 0 là lăn lên (Zoom in)
                 const delta = e.deltaY * 0.001; 
                 manualZoomLevel -= delta;
-                // Giới hạn trong khoảng 0 đến 1
                 manualZoomLevel = Math.max(0, Math.min(1, manualZoomLevel));
             }, { passive: false });
 
-            // 2. LOGIC CẢM ỨNG (MOBILE)
+            // --- 2. BẮT ĐẦU CHẠM (MOBILE) ---
             el.addEventListener('touchstart', (e) => {
                 if (e.touches.length === 1) {
                     touchStartX = e.touches[0].clientX; 
                     touchStartY = e.touches[0].clientY; 
                     isTouching = true;
+                    
+                    // Logic Long Press (Giữ 5s để hiện pháo hoa)
+                    longPressTimer = setTimeout(() => { 
+                        if(isGalleryMode) {
+                            // Reset trạng thái nếu kích hoạt thành công
+                            lastTapTime = 0; 
+                            triggerFireworkMode(); 
+                        }
+                    }, 5000); // 5 giây
                 } 
-                // Phát hiện chạm 2 ngón (bắt đầu Pinch)
                 else if (e.touches.length === 2) {
                     isPinching = true;
                     const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -434,127 +441,91 @@
                 }
             }, {passive: false});
 
+            // --- 3. DI CHUYỂN NGÓN TAY ---
             el.addEventListener('touchmove', (e) => {
+                clearTimeout(longPressTimer); // Hủy Long Press nếu di chuyển tay
                 if(isFireworkMode) return;
                 e.preventDefault(); 
 
-                // Xử lý xoay (1 ngón) - giữ nguyên logic cũ của bạn nhưng thêm điều kiện !isPinching
+                // Xoay xe (1 ngón)
                 if(e.touches.length === 1 && !isPinching) {
                     const x = e.touches[0].clientX; const y = e.touches[0].clientY;
-                    const dx = (x - touchStartX) * 0.005; const dy = (y - touchStartY) * 0.005;
-
-                    if(!isGalleryMode) {
-                        STATE.targetRotation.x += dy; STATE.targetRotation.y += dx;
-                        STATE.currentRotation.x = STATE.targetRotation.x; STATE.currentRotation.y = STATE.targetRotation.y;
-                        if(carModel) { carModel.rotation.y = STATE.currentRotation.y; carModel.rotation.x = STATE.currentRotation.x; }
+                    // Chỉ xoay nếu di chuyển đáng kể (tránh rung lắc khi tap)
+                    if (Math.abs(x - touchStartX) > 2 || Math.abs(y - touchStartY) > 2) {
+                        const dx = (x - touchStartX) * 0.005; const dy = (y - touchStartY) * 0.005;
+                        if(!isGalleryMode) {
+                            STATE.targetRotation.x += dy; STATE.targetRotation.y += dx;
+                            STATE.currentRotation.x = STATE.targetRotation.x; 
+                            STATE.currentRotation.y = STATE.targetRotation.y;
+                            if(carModel) { carModel.rotation.y = STATE.currentRotation.y; carModel.rotation.x = STATE.currentRotation.x; }
+                        }
+                        touchStartX = x; touchStartY = y;
                     }
-                    touchStartX = x; touchStartY = y;
                 }
 
-                // Xử lý Zoom (2 ngón) - THÊM MỚI
+                // Zoom (2 ngón)
                 if (e.touches.length === 2) {
                     const dx = e.touches[0].clientX - e.touches[1].clientX;
                     const dy = e.touches[0].clientY - e.touches[1].clientY;
                     const currentDist = Math.sqrt(dx*dx + dy*dy);
-                    
-                    // Tính độ lệch khoảng cách để tăng/giảm zoom
                     const diff = (currentDist - initialPinchDistance) * 0.005; 
                     manualZoomLevel += diff;
                     manualZoomLevel = Math.max(0, Math.min(1, manualZoomLevel));
-                    
-                    initialPinchDistance = currentDist; // Cập nhật lại cho frame sau
+                    initialPinchDistance = currentDist; 
                 }
             }, {passive: false});
 
+            // --- 4. KẾT THÚC CHẠM (XỬ LÝ DOUBLE TAP & CHỌN ẢNH) ---
             el.addEventListener('touchend', (e) => {
-                    // 1. Nếu đang vuốt hoặc zoom thì bỏ qua
-                    if (isPinching || Math.abs(e.changedTouches[0].clientX - touchStartX) > 10 || Math.abs(e.changedTouches[0].clientY - touchStartY) > 10) {
-                        isTouching = false;
-                        isPinching = false;
+                clearTimeout(longPressTimer); // Luôn hủy Long Press khi nhấc tay
+                
+                // Nếu đang Pinch (zoom) hoặc vừa vuốt tay -> Không tính là Tap -> Thoát
+                if (isPinching || Math.abs(e.changedTouches[0].clientX - touchStartX) > 10 || Math.abs(e.changedTouches[0].clientY - touchStartY) > 10) {
+                    isTouching = false; isPinching = false;
+                    return;
+                }
+
+                isTouching = false; isPinching = false;
+                const currentTime = new Date().getTime();
+                const tapLength = currentTime - lastTapTime;
+
+                // A. ƯU TIÊN 1: CHỌN ẢNH (RAYCASTER)
+                // Nếu chạm vào ảnh -> Mở ảnh ngay (Không cần double tap)
+                if (isGalleryMode) {
+                    mouse.x = (e.changedTouches[0].clientX / window.innerWidth) * 2 - 1;
+                    mouse.y = -(e.changedTouches[0].clientY / window.innerHeight) * 2 + 1;
+                    raycaster.setFromCamera(mouse, camera);
+                    const intersects = raycaster.intersectObjects(polaroidGroup.children);
+
+                    if (intersects.length > 0) {
+                        // Chạm trúng ảnh -> Mở ảnh
+                        const selectedObject = intersects[0].object;
+                        if (inspectedPhoto !== selectedObject) {
+                            animatePhotoPopup(true, selectedObject);
+                        }
+                        lastTapTime = 0; // Reset tap để tránh xung đột
+                        return; // Kết thúc, không xử lý double tap
+                    }
+                    
+                    // Nếu đang xem ảnh to mà chạm ra ngoài -> Đóng ảnh
+                    if (inspectedPhoto) {
+                        animatePhotoPopup(false);
+                        lastTapTime = 0;
                         return;
                     }
-
-                    isTouching = false;
-                    isPinching = false;
-                    
-                    // 2. Nếu đang ở chế độ xem ảnh, kiểm tra Raycast
-                    if (isGalleryMode) {
-                        // Tính toạ độ chuột chuẩn hóa (-1 đến +1)
-                        mouse.x = (e.changedTouches[0].clientX / window.innerWidth) * 2 - 1;
-                        mouse.y = -(e.changedTouches[0].clientY / window.innerHeight) * 2 + 1;
-
-                        raycaster.setFromCamera(mouse, camera);
-
-                        // Kiểm tra va chạm với các tấm ảnh
-                        const intersects = raycaster.intersectObjects(polaroidGroup.children);
-
-                        if (intersects.length > 0) {
-                            // TRƯỜNG HỢP 1: Chạm trúng ảnh
-                            const selectedObject = intersects[0].object;
-                            
-                            // Nếu ảnh đó chưa được mở -> Mở nó ra
-                            if (inspectedPhoto !== selectedObject) {
-                                animatePhotoPopup(true, selectedObject);
-                            } 
-                            // Nếu chạm lại vào ảnh đang mở -> Sẽ xử lý ở logic dưới (đóng) hoặc giữ nguyên
-                            return; // Kết thúc, không đổi chế độ
-                        } 
-                        
-                        // TRƯỜNG HỢP 2: Chạm vào nền trống (không trúng ảnh nào)
-                        if (inspectedPhoto) {
-                            // Nếu đang có ảnh mở -> Đóng ảnh đó lại
-                            animatePhotoPopup(false);
-                            return; // Kết thúc
-                        }
-                    }
-
-                    // 3. Logic cũ: Nếu không phải các trường hợp trên thì đổi chế độ (Toggle Mode)
-                    // (Ví dụ: Đang ở chế độ xem ảnh mà chạm nền trống và ko có ảnh nào mở -> Quay về chế độ Xe)
-                    const now = Date.now();
-                    if (now - touchLastTap < 300) {
-                        // Double tap (nếu muốn) hoặc Single tap tùy bạn chọn logic
-                    }
-                    // Ở đây code cũ của bạn là Single tap để đổi mode. 
-                    // Nhưng khi đã có tính năng chọn ảnh, việc tap nhầm nền rất dễ xảy ra.
-                    // Tốt nhất là chỉ đổi mode khi tap vào nút hoặc tap vào vùng trống khi KHÔNG có ảnh nào mở.
-                    
-                    toggleMode(); 
-                    touchLastTap = now;
-                });          
-           
-            
-            el.addEventListener('touchstart', (e) => {
-                if(e.touches.length === 1) {
-                    touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; isTouching = true;
                 }
-            }, {passive: false});
 
-            el.addEventListener('touchmove', (e) => {
-                if(!isTouching || isFireworkMode) return;
-                e.preventDefault(); 
-                if(e.touches.length === 1) {
-                    const x = e.touches[0].clientX; const y = e.touches[0].clientY;
-                    const dx = (x - touchStartX) * 0.005; const dy = (y - touchStartY) * 0.005;
-
-                    if(!isGalleryMode) {
-                        STATE.targetRotation.x += dy; STATE.targetRotation.y += dx;
-                        STATE.currentRotation.x = STATE.targetRotation.x; STATE.currentRotation.y = STATE.targetRotation.y;
-                        if(carModel) { carModel.rotation.y = STATE.currentRotation.y; carModel.rotation.x = STATE.currentRotation.x; }
-                    }
-                    touchStartX = x; touchStartY = y;
+                // B. ƯU TIÊN 2: DOUBLE TAP ĐỂ ĐỔI CHẾ ĐỘ
+                // Logic: Nếu khoảng cách giữa 2 lần tap < 300ms -> Là Double Tap
+                if (tapLength < 300 && tapLength > 0) {
+                    toggleMode();
+                    lastTapTime = 0; // Reset sau khi thực hiện xong
+                    e.preventDefault(); // Ngăn trình duyệt zoom
+                } else {
+                    // Đây mới là lần tap đầu tiên, ghi lại thời gian và chờ lần 2
+                    lastTapTime = currentTime;
                 }
-            }, {passive: false});
-
-            el.addEventListener('touchend', (e) => {
-                isTouching = false;
-                const now = Date.now();
-                if (now - touchLastTap < 300) toggleMode();
-                touchLastTap = now;
             });
-            
-            let longPressTimer;
-            el.addEventListener('touchstart', () => { longPressTimer = setTimeout(() => { if(isGalleryMode) triggerFireworkMode(); }, 5000); });
-            el.addEventListener('touchend', () => clearTimeout(longPressTimer));
         }
 
         function loadPolaroidTextures() {
