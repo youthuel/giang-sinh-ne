@@ -3,12 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Giáng sinh zui zẻ</title>
+    <title>Merry Xmas Na Yêu (Smart Optimized)</title>
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Pinyon+Script&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Pinyon+Script&display=swap" rel="stylesheet">
+    
     <style>
-        body{margin:0;overflow:hidden;background-color:#0f0505;font-family:'Cinzel',serif;user-select:none; -webkit-tap-highlight-color: transparent;}
+        /* ĐÃ SỬA: Đổi font mặc định body sang Playfair Display */
+        body{margin:0;overflow:hidden;background-color:#0f0505;font-family:'Playfair Display',serif;user-select:none; -webkit-tap-highlight-color: transparent;}
         
         #bg-gradient {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -2;
@@ -44,15 +47,17 @@
             text-align: center; line-height: 1.2;
         }
         
+        /* ĐÃ SỬA: Font chữ chỉ báo chế độ */
         #mode-indicator {
-            font-family: 'Cinzel', serif; font-size: 3vw; font-weight: 700; color: #FFD700;
+            font-family: 'Playfair Display', serif; font-size: 3vw; font-weight: 700; color: #FFD700;
             letter-spacing: 4px; text-transform: uppercase; margin-top: 10px; 
             border-bottom: 1px solid rgba(255, 215, 0, 0.3); padding-bottom: 5px;
         }
 
+        /* ĐÃ SỬA: Font chữ thông điệp bí mật */
         #secret-message {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-family: 'Cinzel', serif; font-weight: 700; font-size: 8vw; width: 90%; white-space: normal; line-height: 1.3;
+            font-family: 'Playfair Display', serif; font-weight: 700; font-size: 8vw; width: 90%; white-space: normal; line-height: 1.3;
             text-transform: uppercase; letter-spacing: 4px; text-align: center; z-index: 100;
             opacity: 0; pointer-events: none; 
             background: linear-gradient(to bottom, #fff8db 0%, #FFD700 40%, #DAA520 100%);
@@ -72,15 +77,20 @@
             box-shadow: 0 0 10px rgba(255, 215, 0, 0.3); overflow: hidden; opacity: 0.6;
         }
         #webcam-canvas { width: 100%; height: 100%; transform: scaleX(-1); border-radius: 2px; }
+        
+        /* ĐÃ SỬA: Font chữ thông số cam */
         #cam-stats { display: none; }
         
         #start-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(15,5,5,0.9);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:opacity .8s}
+        
+        /* ĐÃ SỬA: Font chữ nút BẮT ĐẦU */
         .start-btn {
             border: 1px solid #eebb66; padding: 15px 30px; color: #eebb66; font-size: 14px;
-            font-family: 'Cinzel', serif; letter-spacing: 4px; text-transform: uppercase;
+            font-family: 'Playfair Display', serif; font-weight: 700; letter-spacing: 4px; text-transform: uppercase;
             background: rgba(0,0,0,0.6); margin-bottom: 15px; box-shadow: 0 0 20px rgba(238, 187, 102, 0.2); transition: all 0.3s;
         }
-        .start-note{color:#886666;font-size:12px; font-style: italic;}
+        
+        .start-note{color:#886666;font-size:12px; font-style: italic; font-family: 'Playfair Display', serif;}
         
         #touch-hint {
             position: absolute; bottom: 100px; width: 100%; text-align: center;
@@ -96,7 +106,7 @@
             #secret-message { font-size: 5vw; width: 80%; } 
             #lyrics-text { font-size: 32px; }
             #webcam-wrapper { width: 150px; height: 112px; opacity: 1; }
-            #cam-stats { display: block; position: absolute; bottom: 0; left: 0; width: 100%; text-align: center; font-family: 'Cinzel', serif; font-size: 6px; font-weight: 700; color: #FFD700; letter-spacing: 2px; text-transform: uppercase; z-index: 26; background: rgba(0,0,0,0.8); padding: 4px 0; border-top: 1px solid #FFD700; }
+            #cam-stats { display: block; position: absolute; bottom: 0; left: 0; width: 100%; text-align: center; font-family: 'Playfair Display', serif; font-size: 6px; font-weight: 700; color: #FFD700; letter-spacing: 2px; text-transform: uppercase; z-index: 26; background: rgba(0,0,0,0.8); padding: 4px 0; border-top: 1px solid #FFD700; }
         }
     </style>
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
