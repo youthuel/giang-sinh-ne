@@ -206,6 +206,7 @@
         let initialPinchDistance = 0;
         let isPinching = false;
 
+
         function initFireworkCanvas() {
             fwCanvas = document.getElementById('firework-canvas'); fwCtx = fwCanvas.getContext('2d');
             resizeFw(); window.addEventListener('resize', resizeFw);
@@ -466,13 +467,60 @@
             }, {passive: false});
 
             el.addEventListener('touchend', (e) => {
-                isTouching = false;
-                if (e.touches.length < 2) isPinching = false; // Kết thúc pinch
-                
-                const now = Date.now();
-                if (now - touchLastTap < 300 && !isPinching) toggleMode(); // Chỉ toggle nếu không phải đang zoom
-                touchLastTap = now;
-            });           
+                    // 1. Nếu đang vuốt hoặc zoom thì bỏ qua
+                    if (isPinching || Math.abs(e.changedTouches[0].clientX - touchStartX) > 10 || Math.abs(e.changedTouches[0].clientY - touchStartY) > 10) {
+                        isTouching = false;
+                        isPinching = false;
+                        return;
+                    }
+
+                    isTouching = false;
+                    isPinching = false;
+                    
+                    // 2. Nếu đang ở chế độ xem ảnh, kiểm tra Raycast
+                    if (isGalleryMode) {
+                        // Tính toạ độ chuột chuẩn hóa (-1 đến +1)
+                        mouse.x = (e.changedTouches[0].clientX / window.innerWidth) * 2 - 1;
+                        mouse.y = -(e.changedTouches[0].clientY / window.innerHeight) * 2 + 1;
+
+                        raycaster.setFromCamera(mouse, camera);
+
+                        // Kiểm tra va chạm với các tấm ảnh
+                        const intersects = raycaster.intersectObjects(polaroidGroup.children);
+
+                        if (intersects.length > 0) {
+                            // TRƯỜNG HỢP 1: Chạm trúng ảnh
+                            const selectedObject = intersects[0].object;
+                            
+                            // Nếu ảnh đó chưa được mở -> Mở nó ra
+                            if (inspectedPhoto !== selectedObject) {
+                                animatePhotoPopup(true, selectedObject);
+                            } 
+                            // Nếu chạm lại vào ảnh đang mở -> Sẽ xử lý ở logic dưới (đóng) hoặc giữ nguyên
+                            return; // Kết thúc, không đổi chế độ
+                        } 
+                        
+                        // TRƯỜNG HỢP 2: Chạm vào nền trống (không trúng ảnh nào)
+                        if (inspectedPhoto) {
+                            // Nếu đang có ảnh mở -> Đóng ảnh đó lại
+                            animatePhotoPopup(false);
+                            return; // Kết thúc
+                        }
+                    }
+
+                    // 3. Logic cũ: Nếu không phải các trường hợp trên thì đổi chế độ (Toggle Mode)
+                    // (Ví dụ: Đang ở chế độ xem ảnh mà chạm nền trống và ko có ảnh nào mở -> Quay về chế độ Xe)
+                    const now = Date.now();
+                    if (now - touchLastTap < 300) {
+                        // Double tap (nếu muốn) hoặc Single tap tùy bạn chọn logic
+                    }
+                    // Ở đây code cũ của bạn là Single tap để đổi mode. 
+                    // Nhưng khi đã có tính năng chọn ảnh, việc tap nhầm nền rất dễ xảy ra.
+                    // Tốt nhất là chỉ đổi mode khi tap vào nút hoặc tap vào vùng trống khi KHÔNG có ảnh nào mở.
+                    
+                    toggleMode(); 
+                    touchLastTap = now;
+                });          
            
             
             el.addEventListener('touchstart', (e) => {
@@ -654,18 +702,51 @@
             }); return closest;
         }
 
-        function animatePhotoPopup(show) {
+        // Sửa hàm này nhận thêm tham số 'targetPhoto'
+        function animatePhotoPopup(show, targetPhoto = null) {
             const now = clock.getElapsedTime();
             if (show) {
-                if (inspectedPhoto || now - lastDropTime < 0.8) return; inspectedPhoto = getClosestPolaroid(); if (!inspectedPhoto) return;
-                scene.attach(inspectedPhoto); inspectedPhoto.visible = true; inspectedPhoto.material.opacity = 1;
+                // Nếu đang có ảnh phóng to rồi thì không làm gì (hoặc có thể đổi ảnh)
+                if (inspectedPhoto && inspectedPhoto !== targetPhoto) {
+                    // Nếu muốn đổi ảnh khác thì đóng ảnh cũ trước (logic phức tạp hơn nên tạm bỏ qua, ta chọn cách đóng rồi mới mở cái mới)
+                    return; 
+                } 
+                
+                if (now - lastDropTime < 0.5) return;
+
+                // LOGIC MỚI: Nếu có targetPhoto (do chạm tay) thì dùng nó, không thì dùng AI (getClosest)
+                if (targetPhoto) {
+                    inspectedPhoto = targetPhoto;
+                } else {
+                    inspectedPhoto = getClosestPolaroid();
+                }
+                
+                if (!inspectedPhoto) return;
+
+                scene.attach(inspectedPhoto); 
+                inspectedPhoto.visible = true; 
+                inspectedPhoto.material.opacity = 1;
+                
+                // Hiệu ứng bay ra trước mặt camera
                 gsap.to(inspectedPhoto.position, { x: 0, y: 0, z: camera.position.z - 2.5, duration: 0.8, ease: "back.out(1.2)" });
-                gsap.to(inspectedPhoto.rotation, { x: 0, y: 0, z: 0, duration: 0.8 }); gsap.to(inspectedPhoto.scale, { x: 1.4, y: 1.4, z: 1.4, duration: 0.8 }); 
+                gsap.to(inspectedPhoto.rotation, { x: 0, y: 0, z: 0, duration: 0.8 }); 
+                gsap.to(inspectedPhoto.scale, { x: 1.4, y: 1.4, z: 1.4, duration: 0.8 }); 
+
             } else {
-                if (!inspectedPhoto) return; const p = inspectedPhoto; inspectedPhoto = null; lastDropTime = now; 
-                polaroidGroup.attach(p); const t = isGalleryMode ? p.userData.targetPos : p.userData.startPos; const r = p.userData.targetRot;
-                gsap.to(p.position, { x: t.x, y: t.y, z: t.z, duration: 0.8, ease: "back.out(1.0)" }); gsap.to(p.scale, { x: 1, y: 1, z: 1, duration: 0.7 });
-                if (isGalleryMode) gsap.to(p.rotation, { x: 0, y: r.y, z: r.z, duration: 0.7, ease: "power2.out" }); else gsap.to(p.material, { opacity: 0, duration: 0.5 });
+                // Đóng ảnh (Logic giữ nguyên)
+                if (!inspectedPhoto) return; 
+                const p = inspectedPhoto; 
+                inspectedPhoto = null; 
+                lastDropTime = now; 
+                
+                polaroidGroup.attach(p); 
+                const t = isGalleryMode ? p.userData.targetPos : p.userData.startPos; 
+                const r = p.userData.targetRot;
+                
+                gsap.to(p.position, { x: t.x, y: t.y, z: t.z, duration: 0.8, ease: "back.out(1.0)" }); 
+                gsap.to(p.scale, { x: 1, y: 1, z: 1, duration: 0.7 });
+                if (isGalleryMode) gsap.to(p.rotation, { x: 0, y: r.y, z: r.z, duration: 0.7, ease: "power2.out" }); 
+                else gsap.to(p.material, { opacity: 0, duration: 0.5 });
             }
         }
 
