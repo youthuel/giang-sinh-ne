@@ -191,6 +191,11 @@
         let fwParticles = [];
         let fwFireworks = [];
 
+        //Code mới
+        let manualZoomLevel = 0; // Giá trị từ 0.0 (xa nhất) đến 1.0 (gần nhất)
+        let initialPinchDistance = 0;
+        let isPinching = false;
+
         function initFireworkCanvas() {
             fwCanvas = document.getElementById('firework-canvas'); fwCtx = fwCanvas.getContext('2d');
             resizeFw(); window.addEventListener('resize', resizeFw);
@@ -389,7 +394,76 @@
         }
 
         function initTouchControls() {
-            const el = document.getElementById('canvas-container');
+        const el = document.getElementById('canvas-container');
+
+            // 1. LOGIC LĂN CHUỘT (PC)
+            el.addEventListener('wheel', (e) => {
+                if(isFireworkMode) return;
+                e.preventDefault();
+                // e.deltaY > 0 là lăn xuống (Zoom out), < 0 là lăn lên (Zoom in)
+                const delta = e.deltaY * 0.001; 
+                manualZoomLevel -= delta;
+                // Giới hạn trong khoảng 0 đến 1
+                manualZoomLevel = Math.max(0, Math.min(1, manualZoomLevel));
+            }, { passive: false });
+
+            // 2. LOGIC CẢM ỨNG (MOBILE)
+            el.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    touchStartX = e.touches[0].clientX; 
+                    touchStartY = e.touches[0].clientY; 
+                    isTouching = true;
+                } 
+                // Phát hiện chạm 2 ngón (bắt đầu Pinch)
+                else if (e.touches.length === 2) {
+                    isPinching = true;
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    initialPinchDistance = Math.sqrt(dx*dx + dy*dy);
+                }
+            }, {passive: false});
+
+            el.addEventListener('touchmove', (e) => {
+                if(isFireworkMode) return;
+                e.preventDefault(); 
+
+                // Xử lý xoay (1 ngón) - giữ nguyên logic cũ của bạn nhưng thêm điều kiện !isPinching
+                if(e.touches.length === 1 && !isPinching) {
+                    const x = e.touches[0].clientX; const y = e.touches[0].clientY;
+                    const dx = (x - touchStartX) * 0.005; const dy = (y - touchStartY) * 0.005;
+
+                    if(!isGalleryMode) {
+                        STATE.targetRotation.x += dy; STATE.targetRotation.y += dx;
+                        STATE.currentRotation.x = STATE.targetRotation.x; STATE.currentRotation.y = STATE.targetRotation.y;
+                        if(carModel) { carModel.rotation.y = STATE.currentRotation.y; carModel.rotation.x = STATE.currentRotation.x; }
+                    }
+                    touchStartX = x; touchStartY = y;
+                }
+
+                // Xử lý Zoom (2 ngón) - THÊM MỚI
+                if (e.touches.length === 2) {
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    const currentDist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    // Tính độ lệch khoảng cách để tăng/giảm zoom
+                    const diff = (currentDist - initialPinchDistance) * 0.005; 
+                    manualZoomLevel += diff;
+                    manualZoomLevel = Math.max(0, Math.min(1, manualZoomLevel));
+                    
+                    initialPinchDistance = currentDist; // Cập nhật lại cho frame sau
+                }
+            }, {passive: false});
+
+            el.addEventListener('touchend', (e) => {
+                isTouching = false;
+                if (e.touches.length < 2) isPinching = false; // Kết thúc pinch
+                
+                const now = Date.now();
+                if (now - touchLastTap < 300 && !isPinching) toggleMode(); // Chỉ toggle nếu không phải đang zoom
+                touchLastTap = now;
+            });           
+           
             
             el.addEventListener('touchstart', (e) => {
                 if(e.touches.length === 1) {
@@ -675,13 +749,35 @@
                 STATE.currentRotation.x = carModel.rotation.x;
             }
 
-            if (!isGalleryMode) {
-                let ts, tp, tz;
-                if (isZoomedIn) { ts = SCENE_CONFIG.scaleNear; tp = SCENE_CONFIG.posNear; tz = SCENE_CONFIG.camZNear; } 
-                else { ts = SCENE_CONFIG.scaleFar; tp = SCENE_CONFIG.posFar; tz = SCENE_CONFIG.camZFar; }
-                camera.position.z += (tz - camera.position.z) * SCENE_CONFIG.zoomSpeed;
-                if(carModel) { carModel.scale.setScalar(carModel.scale.x + (ts - carModel.scale.x) * SCENE_CONFIG.zoomSpeed); carModel.position.x += (tp.x - carModel.position.x) * SCENE_CONFIG.zoomSpeed; carModel.position.y += (tp.y - carModel.position.y) * SCENE_CONFIG.zoomSpeed; }
+        if (!isGalleryMode) {
+            // Xác định mức độ Zoom mong muốn:
+            // Nếu AI Pinch (isZoomedIn) thì max zoom (1.0), nếu không thì dùng manualZoomLevel
+            let targetZoomFactor = isZoomedIn ? 1.0 : manualZoomLevel;
+
+            // Nội suy các giá trị dựa trên mức độ Zoom (Lerp)
+            // Zoom càng lớn -> Z càng nhỏ (gần), Scale càng to
+            const targetZ = SCENE_CONFIG.camZFar - (targetZoomFactor * (SCENE_CONFIG.camZFar - SCENE_CONFIG.camZNear));
+            
+            // Lerp Scale xe
+            const currentTargetScale = SCENE_CONFIG.scaleFar + (targetZoomFactor * (SCENE_CONFIG.scaleNear - SCENE_CONFIG.scaleFar));
+            
+            // Lerp Vị trí xe
+            const currentTargetPosX = SCENE_CONFIG.posFar.x + (targetZoomFactor * (SCENE_CONFIG.posNear.x - SCENE_CONFIG.posFar.x));
+            const currentTargetPosY = SCENE_CONFIG.posFar.y + (targetZoomFactor * (SCENE_CONFIG.posNear.y - SCENE_CONFIG.posFar.y));
+
+            // Áp dụng di chuyển mượt (Smoothing)
+            camera.position.z += (targetZ - camera.position.z) * SCENE_CONFIG.zoomSpeed;
+            
+            if(carModel) { 
+                // Smooth Scale
+                const newScale = carModel.scale.x + (currentTargetScale - carModel.scale.x) * SCENE_CONFIG.zoomSpeed;
+                carModel.scale.setScalar(newScale);
+                
+                // Smooth Position
+                carModel.position.x += (currentTargetPosX - carModel.position.x) * SCENE_CONFIG.zoomSpeed;
+                carModel.position.y += (currentTargetPosY - carModel.position.y) * SCENE_CONFIG.zoomSpeed;
             }
+        }
             if (carModel) { carModel.position.y += jarOffsetY; if(jarOffsetY < -2) carModel.scale.setScalar((isZoomedIn ? SCENE_CONFIG.scaleNear : SCENE_CONFIG.scaleFar) * Math.max(0, 1 - (Math.abs(jarOffsetY)/10))); }
             
             if (composer && ENABLE_POST_PROCESSING) composer.render();
