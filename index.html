@@ -652,7 +652,7 @@
 
             if (isTouching) {
                 
-            } else if (STATE.hand.detected) {
+            } else if (STATE.hand.detected && !isTouching) {
                 const targetY = (STATE.hand.x - 0.5) * (Math.PI * 6.0); 
                 const targetX = (STATE.hand.y - 0.5) * (Math.PI * 1.0); 
                 
